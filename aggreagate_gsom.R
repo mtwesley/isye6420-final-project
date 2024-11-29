@@ -1,12 +1,11 @@
-library(dplyr)
 library(readr)
 
+# Directories
 input_dir <- "gsom-merged"
 output_dir <- "gsom-aggregated"
-
 dir.create(output_dir, showWarnings = FALSE)
 
-# List all files for countries
+# List all sorted country files
 file_list <- list.files(input_dir, pattern = "_sorted\\.csv$", full.names = TRUE)
 
 # Process each country file
@@ -14,41 +13,98 @@ for (file in file_list) {
   # Extract the country code from the file name
   country_code <- substr(basename(file), 1, 2)
 
-  # Read the country file
-  data <- read_csv(file, show_col_types = FALSE)
+  # Output file path
+  output_file <- file.path(output_dir, paste0("gsom_", country_code, ".csv"))
+  con_out <- file(output_file, "w") # Open file connection for writing
 
-  # Ensure columns are in lowercase for consistency
-  colnames(data) <- tolower(colnames(data))
+  # Write header row
+  header_written <- FALSE
 
-  # Parse date if necessary and extract year-month
-  if ("date" %in% colnames(data)) {
-    data <- data %>%
-      mutate(year_month = format(as.Date(date, format = "%Y-%m-%d"), "%Y-%m"))
-  } else {
-    stop("The data does not have a 'date' column. Please verify your files.")
+  # Initialize variables
+  current_month <- NULL
+  monthly_stats <- list() # To store running stats
+
+  # Open file connection for reading line-by-line
+  con_in <- file(file, "r")
+
+  # Read the header row
+  header <- readLines(con_in, n = 1)
+  col_names <- strsplit(header, ",")[[1]]
+  writeLines(header, con_out) # Write the header to the output
+
+  # Determine column positions
+  date_col_idx <- match("date", tolower(col_names))
+  numeric_cols_idx <- setdiff(seq_along(col_names), c(date_col_idx)) # Assume non-date columns are numeric
+
+  # Initialize stats for numeric columns
+  initialize_month <- function() {
+    stats <- list()
+    for (col in col_names[numeric_cols_idx]) {
+      stats[[col]] <- list(min = Inf, max = -Inf, sum = 0, count = 0)
+    }
+    return(stats)
   }
 
-  # Select numeric columns for aggregation (exclude metadata columns)
-  metadata_cols <- c("station", "country", "latitude", "longitude", "elevation", "date", "year_month")
-  variable_cols <- setdiff(colnames(data), metadata_cols)
+  # Process rows
+  while (TRUE) {
+    line <- readLines(con_in, n = 1)
+    if (length(line) == 0) break # End of file
 
-  # Group by year-month and compute min, max, and average for all variables
-  aggregated <- data %>%
-    group_by(year_month) %>%
-    summarise(across(
-      all_of(variable_cols),
-      list(
-        min = ~ min(.x, na.rm = TRUE),
-        max = ~ max(.x, na.rm = TRUE),
-        avg = ~ mean(.x, na.rm = TRUE)
-      ),
-      .names = "{.col}_{.fn}"
-    )) %>%
-    ungroup()
+    # Parse row
+    row <- strsplit(line, ",")[[1]]
+    date <- as.Date(row[date_col_idx])
+    year_month <- format(date, "%Y-%m")
 
-  # Save the aggregated data for this country
-  output_file <- file.path(output_dir, paste0("gsom_", country_code, ".csv"))
-  write_csv(aggregated, output_file)
+    # Initialize stats for a new month
+    if (!is.null(current_month) && year_month != current_month) {
+      # Finalize current month's data and write to file
+      result <- c(current_month)
+      for (col in col_names[numeric_cols_idx]) {
+        result <- c(
+          result,
+          monthly_stats[[col]]$min,
+          monthly_stats[[col]]$max,
+          monthly_stats[[col]]$sum / monthly_stats[[col]]$count
+        )
+      }
+      writeLines(paste(result, collapse = ","), con_out)
+
+      # Reset stats for the new month
+      monthly_stats <- initialize_month()
+    }
+
+    # Update current month
+    current_month <- year_month
+
+    # Update stats for numeric columns
+    for (i in numeric_cols_idx) {
+      value <- as.numeric(row[i])
+      if (!is.na(value)) {
+        monthly_stats[[col_names[i]]]$min <- min(monthly_stats[[col_names[i]]]$min, value)
+        monthly_stats[[col_names[i]]]$max <- max(monthly_stats[[col_names[i]]]$max, value)
+        monthly_stats[[col_names[i]]]$sum <- monthly_stats[[col_names[i]]]$sum + value
+        monthly_stats[[col_names[i]]]$count <- monthly_stats[[col_names[i]]]$count + 1
+      }
+    }
+  }
+
+  # Write the last month's data
+  if (!is.null(current_month)) {
+    result <- c(current_month)
+    for (col in col_names[numeric_cols_idx]) {
+      result <- c(
+        result,
+        monthly_stats[[col]]$min,
+        monthly_stats[[col]]$max,
+        monthly_stats[[col]]$sum / monthly_stats[[col]]$count
+      )
+    }
+    writeLines(paste(result, collapse = ","), con_out)
+  }
+
+  # Close file connections
+  close(con_in)
+  close(con_out)
 
   cat("Processed and saved:", output_file, "\n")
 }
