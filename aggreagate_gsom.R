@@ -5,8 +5,12 @@ input_dir <- "gsom-merged"
 output_dir <- "gsom-aggregated"
 dir.create(output_dir, showWarnings = FALSE)
 
-# List all files
-file_list <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+# Hardcoded columns for aggregation
+climate_columns <- c(
+  "CDSD", "CLDD", "DP01", "DP10", "DP1X", "DT00", "DT32", "DX32", "DX70", "DX90",
+  "DYNT", "DYXP", "DYXT", "EMNT", "EMXP", "EMXT", "HDSD", "HTDD", "PRCP",
+  "TAVG", "TMAX", "TMIN"
+)
 
 # Function to process a file line-by-line
 process_file <- function(file_path, output_path) {
@@ -14,14 +18,23 @@ process_file <- function(file_path, output_path) {
   con_in <- file(file_path, "r")
   con_out <- file(output_path, "w")
 
-  # Read the header and determine column positions
+  # Read the header
   header <- readLines(con_in, n = 1)
   col_names <- strsplit(header, ",")[[1]]
-  writeLines(paste(c("year_month", paste(col_names, c("min", "max", "avg"), sep = "_")), collapse = ","), con_out)
 
-  # Column positions
+  # Validate required columns
+  required_indices <- match(climate_columns, col_names)
   date_idx <- match("DATE", toupper(col_names))
-  numeric_indices <- setdiff(seq_along(col_names), c(date_idx))
+
+  if (is.na(date_idx)) stop("DATE column missing in file:", file_path)
+  if (any(is.na(required_indices))) stop("Missing expected climate columns in file:", file_path)
+
+  # Prepare output header
+  output_header <- paste(
+    c("year_month", paste(climate_columns, c("min", "max", "avg"), sep = "_")),
+    collapse = ","
+  )
+  writeLines(output_header, con_out)
 
   # Initialize variables
   current_month <- NULL
@@ -29,11 +42,13 @@ process_file <- function(file_path, output_path) {
 
   initialize_stats <- function() {
     stats <- list()
-    for (i in numeric_indices) {
-      stats[[col_names[i]]] <- list(min = Inf, max = -Inf, sum = 0, count = 0)
+    for (col in climate_columns) {
+      stats[[col]] <- list(min = Inf, max = -Inf, sum = 0, count = 0)
     }
     return(stats)
   }
+
+  running_stats <- initialize_stats()
 
   # Process each line
   while (TRUE) {
@@ -44,36 +59,39 @@ process_file <- function(file_path, output_path) {
     row <- strsplit(line, ",")[[1]]
     year_month <- row[date_idx]
 
-    # Initialize or reset stats for a new month
+    # Skip malformed rows
+    if (is.na(year_month) || !grepl("^\\d{4}-\\d{2}$", year_month)) next
+
+    # Handle a new month
     if (!is.null(current_month) && year_month != current_month) {
-      # Write current month's stats to the output file
+      # Write aggregated stats for the current month
       result <- c(current_month)
-      for (i in numeric_indices) {
-        col_name <- col_names[i]
+      for (col in climate_columns) {
+        stat <- running_stats[[col]]
         result <- c(
           result,
-          running_stats[[col_name]]$min,
-          running_stats[[col_name]]$max,
-          running_stats[[col_name]]$sum / running_stats[[col_name]]$count
+          if (stat$count > 0) stat$min else NA,
+          if (stat$count > 0) stat$max else NA,
+          if (stat$count > 0) stat$sum / stat$count else NA
         )
       }
       writeLines(paste(result, collapse = ","), con_out)
 
-      # Reset for the next month
+      # Reset stats for the next month
       running_stats <- initialize_stats()
     }
 
     # Update the current month
     current_month <- year_month
 
-    # Update stats for each numeric column
-    for (i in numeric_indices) {
-      value <- as.numeric(row[i])
+    # Update stats for each climate column
+    for (col in climate_columns) {
+      value <- as.numeric(row[match(col, col_names)])
       if (!is.na(value)) {
-        running_stats[[col_names[i]]]$min <- min(running_stats[[col_names[i]]]$min, value)
-        running_stats[[col_names[i]]]$max <- max(running_stats[[col_names[i]]]$max, value)
-        running_stats[[col_names[i]]]$sum <- running_stats[[col_names[i]]]$sum + value
-        running_stats[[col_names[i]]]$count <- running_stats[[col_names[i]]]$count + 1
+        running_stats[[col]]$min <- min(running_stats[[col]]$min, value)
+        running_stats[[col]]$max <- max(running_stats[[col]]$max, value)
+        running_stats[[col]]$sum <- running_stats[[col]]$sum + value
+        running_stats[[col]]$count <- running_stats[[col]]$count + 1
       }
     }
   }
@@ -81,13 +99,13 @@ process_file <- function(file_path, output_path) {
   # Finalize the last month's data
   if (!is.null(current_month)) {
     result <- c(current_month)
-    for (i in numeric_indices) {
-      col_name <- col_names[i]
+    for (col in climate_columns) {
+      stat <- running_stats[[col]]
       result <- c(
         result,
-        running_stats[[col_name]]$min,
-        running_stats[[col_name]]$max,
-        running_stats[[col_name]]$sum / running_stats[[col_name]]$count
+        if (stat$count > 0) stat$min else NA,
+        if (stat$count > 0) stat$max else NA,
+        if (stat$count > 0) stat$sum / stat$count else NA
       )
     }
     writeLines(paste(result, collapse = ","), con_out)
