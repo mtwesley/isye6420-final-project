@@ -5,113 +5,89 @@ input_dir <- "gsom-merged"
 output_dir <- "gsom-aggregated"
 dir.create(output_dir, showWarnings = FALSE)
 
-# List all country files
+# List all files
 file_list <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 
-# Process each country file
-for (file in file_list) {
-  # Extract the country code from the file name
-  country_code <- substr(basename(file), 1, 2)
+# Function to process a file line-by-line
+process_file <- function(file_path, output_path) {
+  # Open file connections
+  con_in <- file(file_path, "r")
+  con_out <- file(output_path, "w")
 
-  # Output file path
-  output_file <- file.path(output_dir, paste0("gsom_", country_code, ".csv"))
-  con_out <- file(output_file, "w") # Open file connection for writing
+  # Read the header and determine column positions
+  header <- readLines(con_in, n = 1)
+  col_names <- strsplit(header, ",")[[1]]
+  writeLines(paste(c("year_month", paste(col_names, c("min", "max", "avg"), sep = "_")), collapse = ","), con_out)
 
-  # Logging: Starting a new file
-  cat("Processing country file:", file, "\n")
-
-  # Write header row
-  header_written <- FALSE
+  # Column positions
+  date_idx <- match("DATE", toupper(col_names))
+  numeric_indices <- setdiff(seq_along(col_names), c(date_idx))
 
   # Initialize variables
   current_month <- NULL
-  monthly_stats <- list() # To store running stats
-  total_rows <- 0 # Track rows processed for logging
+  running_stats <- list()
 
-  # Open file connection for reading line-by-line
-  con_in <- file(file, "r")
-
-  # Read the header row
-  header <- readLines(con_in, n = 1)
-  col_names <- strsplit(header, ",")[[1]]
-  writeLines(header, con_out) # Write the header to the output
-
-  # Determine column positions
-  year_month_col_idx <- match("year_month", tolower(col_names))
-  numeric_cols_idx <- setdiff(seq_along(col_names), c(year_month_col_idx)) # Assume non-year_month columns are numeric
-
-  # Initialize stats for numeric columns
-  initialize_month <- function() {
+  initialize_stats <- function() {
     stats <- list()
-    for (col in col_names[numeric_cols_idx]) {
-      stats[[col]] <- list(min = Inf, max = -Inf, sum = 0, count = 0)
+    for (i in numeric_indices) {
+      stats[[col_names[i]]] <- list(min = Inf, max = -Inf, sum = 0, count = 0)
     }
     return(stats)
   }
 
-  # Process rows
+  # Process each line
   while (TRUE) {
     line <- readLines(con_in, n = 1)
     if (length(line) == 0) break # End of file
-    if (line == "") next # Skip empty lines
 
-    total_rows <- total_rows + 1 # Increment row count
-    if (total_rows %% 1000 == 0) {
-      cat("Processed", total_rows, "rows...\n") # Log every 1,000 rows
-    }
-
-    # Parse row
+    # Parse the line
     row <- strsplit(line, ",")[[1]]
-    year_month <- row[year_month_col_idx]
+    year_month <- row[date_idx]
 
-    # Initialize stats for a new month
+    # Initialize or reset stats for a new month
     if (!is.null(current_month) && year_month != current_month) {
-      # Logging: Completed aggregation for a month
-      cat("Completed aggregation for:", current_month, "\n")
-
-      # Finalize current month's data and write to file
+      # Write current month's stats to the output file
       result <- c(current_month)
-      for (col in col_names[numeric_cols_idx]) {
+      for (i in numeric_indices) {
+        col_name <- col_names[i]
         result <- c(
           result,
-          monthly_stats[[col]]$min,
-          monthly_stats[[col]]$max,
-          monthly_stats[[col]]$sum / monthly_stats[[col]]$count
+          running_stats[[col_name]]$min,
+          running_stats[[col_name]]$max,
+          running_stats[[col_name]]$sum / running_stats[[col_name]]$count
         )
       }
       writeLines(paste(result, collapse = ","), con_out)
 
-      # Reset stats for the new month
-      monthly_stats <- initialize_month()
+      # Reset for the next month
+      running_stats <- initialize_stats()
     }
 
-    # Update current month
+    # Update the current month
     current_month <- year_month
 
-    # Update stats for numeric columns
-    for (i in numeric_cols_idx) {
+    # Update stats for each numeric column
+    for (i in numeric_indices) {
       value <- as.numeric(row[i])
       if (!is.na(value)) {
-        monthly_stats[[col_names[i]]]$min <- min(monthly_stats[[col_names[i]]]$min, value)
-        monthly_stats[[col_names[i]]]$max <- max(monthly_stats[[col_names[i]]]$max, value)
-        monthly_stats[[col_names[i]]]$sum <- monthly_stats[[col_names[i]]]$sum + value
-        monthly_stats[[col_names[i]]]$count <- monthly_stats[[col_names[i]]]$count + 1
+        running_stats[[col_names[i]]]$min <- min(running_stats[[col_names[i]]]$min, value)
+        running_stats[[col_names[i]]]$max <- max(running_stats[[col_names[i]]]$max, value)
+        running_stats[[col_names[i]]]$sum <- running_stats[[col_names[i]]]$sum + value
+        running_stats[[col_names[i]]]$count <- running_stats[[col_names[i]]]$count + 1
       }
     }
   }
 
-  # Write the last month's data
+  # Finalize the last month's data
   if (!is.null(current_month)) {
-    # Logging: Writing final month
-    cat("Writing final aggregation for:", current_month, "\n")
-
     result <- c(current_month)
-    for (col in col_names[numeric_cols_idx]) {
+    for (i in numeric_indices) {
+      col_name <- col_names[i]
       result <- c(
         result,
-        monthly_stats[[col]]$min,
-        monthly_stats[[col]]$max,
-        monthly_stats[[col]]$sum / monthly_stats[[col]]$count
+        running_stats[[col_name]]$min,
+        running_stats[[col_name]]$max,
+        running_stats[[col_name]]$sum / running_stats[[col_name]]$count
       )
     }
     writeLines(paste(result, collapse = ","), con_out)
@@ -120,10 +96,15 @@ for (file in file_list) {
   # Close file connections
   close(con_in)
   close(con_out)
-
-  # Logging: Completed file
-  cat("Completed processing for country file:", file, "\n")
 }
 
-# Print completion message
-cat("Aggregation completed for all countries.\n")
+# Process each country file
+for (file in file_list) {
+  country_code <- substr(basename(file), 1, 2)
+  output_file <- file.path(output_dir, paste0("gsom_", country_code, ".csv"))
+  cat("Processing file:", file, "\n")
+  process_file(file, output_file)
+  cat("Finished processing:", file, "\n")
+}
+
+cat("Aggregation completed for all files.\n")
