@@ -1,0 +1,59 @@
+# Ignore data files and processed outputs
+gsoy-latest/
+gsoy-merged/
+gsom-latest/
+gsom-merged/
+*.txt
+*.gz
+*.zip
+*.tar
+*.rds
+*.rda
+*.h5
+*.nc
+*.json
+*.db
+*.xls
+*.xlsx
+
+# Ignore macOS system files
+.DS_Store
+.AppleDouble
+._*
+
+# Ignore R-specific files
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj
+
+# Ignore temporary and backup files
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*.swo
+*~
+
+# Ignore compiled or intermediate files
+*.o
+*.out
+*.a
+*.so
+*.dll
+*.dylib
+
+# Ignore bash temporary files
+*.~
+*.#*
+
+# Ignore Python-related temporary files if Python tools are used
+__pycache__/
+*.py[cod]
+*.ipynb_checkpoints/
+
+# Ignore IDE-specific files (if using Visual Studio Code or others)
+.vscode/
+.idea/
