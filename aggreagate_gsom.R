@@ -5,8 +5,8 @@ input_dir <- "gsom-merged"
 output_dir <- "gsom-aggregated"
 dir.create(output_dir, showWarnings = FALSE)
 
-# List all sorted country files
-file_list <- list.files(input_dir, pattern = "_sorted\\.csv$", full.names = TRUE)
+# List all country files
+file_list <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
 
 # Process each country file
 for (file in file_list) {
@@ -17,12 +17,16 @@ for (file in file_list) {
   output_file <- file.path(output_dir, paste0("gsom_", country_code, ".csv"))
   con_out <- file(output_file, "w") # Open file connection for writing
 
+  # Logging: Starting a new file
+  cat("Processing country file:", file, "\n")
+
   # Write header row
   header_written <- FALSE
 
   # Initialize variables
   current_month <- NULL
   monthly_stats <- list() # To store running stats
+  total_rows <- 0 # Track rows processed for logging
 
   # Open file connection for reading line-by-line
   con_in <- file(file, "r")
@@ -33,8 +37,8 @@ for (file in file_list) {
   writeLines(header, con_out) # Write the header to the output
 
   # Determine column positions
-  date_col_idx <- match("date", tolower(col_names))
-  numeric_cols_idx <- setdiff(seq_along(col_names), c(date_col_idx)) # Assume non-date columns are numeric
+  year_month_col_idx <- match("year_month", tolower(col_names))
+  numeric_cols_idx <- setdiff(seq_along(col_names), c(year_month_col_idx)) # Assume non-year_month columns are numeric
 
   # Initialize stats for numeric columns
   initialize_month <- function() {
@@ -49,14 +53,22 @@ for (file in file_list) {
   while (TRUE) {
     line <- readLines(con_in, n = 1)
     if (length(line) == 0) break # End of file
+    if (line == "") next # Skip empty lines
+
+    total_rows <- total_rows + 1 # Increment row count
+    if (total_rows %% 1000 == 0) {
+      cat("Processed", total_rows, "rows...\n") # Log every 1,000 rows
+    }
 
     # Parse row
     row <- strsplit(line, ",")[[1]]
-    date <- as.Date(row[date_col_idx])
-    year_month <- format(date, "%Y-%m")
+    year_month <- row[year_month_col_idx]
 
     # Initialize stats for a new month
     if (!is.null(current_month) && year_month != current_month) {
+      # Logging: Completed aggregation for a month
+      cat("Completed aggregation for:", current_month, "\n")
+
       # Finalize current month's data and write to file
       result <- c(current_month)
       for (col in col_names[numeric_cols_idx]) {
@@ -90,6 +102,9 @@ for (file in file_list) {
 
   # Write the last month's data
   if (!is.null(current_month)) {
+    # Logging: Writing final month
+    cat("Writing final aggregation for:", current_month, "\n")
+
     result <- c(current_month)
     for (col in col_names[numeric_cols_idx]) {
       result <- c(
@@ -106,7 +121,8 @@ for (file in file_list) {
   close(con_in)
   close(con_out)
 
-  cat("Processed and saved:", output_file, "\n")
+  # Logging: Completed file
+  cat("Completed processing for country file:", file, "\n")
 }
 
 # Print completion message
