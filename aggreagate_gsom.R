@@ -38,14 +38,15 @@ process_file <- function(file_path, output_path) {
   col_names <- as.character(header_df[1, ])
 
   # Validate required columns
-  required_indices <- match(climate_columns, col_names)
+  # required_indices <- match(climate_columns, col_names)
   date_idx <- match("DATE", toupper(col_names)) # Handle "DATE" case insensitivity
 
   if (is.na(date_idx)) stop("DATE column missing in file: ", file_path)
-  if (any(is.na(required_indices))) {
-    missing_cols <- climate_columns[is.na(required_indices)]
-    stop("Missing expected climate columns in file ", file_path, ": ", paste(missing_cols, collapse = ", "))
-  }
+
+  # if (any(is.na(required_indices))) {
+  #   missing_cols <- climate_columns[is.na(required_indices)]
+  #   stop("Missing expected climate columns in file ", file_path, ": ", paste(missing_cols, collapse = ", "))
+  # }
 
   # Prepare output header
   aggregated_columns <- unlist(lapply(climate_columns, function(col) {
