@@ -16,20 +16,21 @@ for (file_path in file_list) {
   numeric_cols <- setdiff(colnames(data), non_numeric_cols)
 
   aggregated_data <- data %>%
-    group_by(DATE) %>%
+    group_by(COUNTRY, DATE) %>%
     summarize(
       across(
         all_of(numeric_cols),
         list(
-          MIN = ~ ifelse(is.finite(min(., na.rm = TRUE)), min(., na.rm = TRUE), NA),
-          MAX = ~ ifelse(is.finite(max(., na.rm = TRUE)), max(., na.rm = TRUE), NA),
+          MIN = ~ min(., na.rm = TRUE),
+          MAX = ~ max(., na.rm = TRUE),
           MEAN = ~ mean(., na.rm = TRUE),
           SD = ~ sd(., na.rm = TRUE)
         ),
         .names = "{.col}_{.fn}"
       )
     ) %>%
-    arrange(DATE)
+    arrange(DATE) %>%
+    mutate(across(everything(), ~ ifelse(is.infinite(.), NA, .)))
 
   output_file <- file.path(output_dir, basename(file_path))
   write.csv(aggregated_data, output_file, row.names = FALSE, na = "")
