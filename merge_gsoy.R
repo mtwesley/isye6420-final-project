@@ -42,7 +42,7 @@ for (country_code in names(country_files_map)) {
   }
 
   output_file <- file.path(output_dir, paste0(country_code, ".csv"))
-  write.csv(country_data, output_file, row.names = FALSE)
+  write.csv(country_data, output_file, row.names = FALSE, na = "")
   cat("  Merged file written for:", country_code, "\n")
 }
 
