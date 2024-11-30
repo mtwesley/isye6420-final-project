@@ -1,8 +1,4 @@
-# Load necessary libraries
-library(dplyr)
-
-# Function to process climate data with COUNTRY column, reading line-by-line
-process_climate_data_folder <- function(input_folder, output_folder) {
+process_climate_data_folder <- function(input_folder, output_folder, chunk_size = 1) {
   # Ensure the output folder exists
   if (!dir.exists(output_folder)) {
     dir.create(output_folder)
@@ -29,138 +25,107 @@ process_climate_data_folder <- function(input_folder, output_folder) {
     # Initialize an empty list to store aggregated data
     aggregated_data <- list()
 
-    # Open the connection to the input file
+    # Open a connection to the input file
     con <- file(file_path, "r")
 
-    # Read the header line
+    # Read the header to get column names
     header_line <- readLines(con, n = 1)
-    if (length(header_line) == 0) {
-      close(con)
-      cat("Empty file:", file_path, ". Skipping.\n")
-      next
-    }
+    col_names <- strsplit(header_line, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", perl = TRUE)[[1]]
+    num_cols <- length(col_names)
 
-    # Parse the header
-    header <- tryCatch(
-      read.csv(text = header_line, header = TRUE, stringsAsFactors = FALSE),
-      error = function(e) {
-        close(con)
-        cat("Failed to parse header in", file_path, ": ", e$message, "\n")
-        return(NULL)
+    # Function to parse rows and truncate to the correct number of columns
+    parse_and_truncate_row <- function(line, col_names) {
+      fields <- strsplit(line, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", perl = TRUE)[[1]]
+      # Truncate or pad the row to match the header's column count
+      if (length(fields) > num_cols) {
+        fields <- fields[1:num_cols]
+      } else if (length(fields) < num_cols) {
+        fields <- c(fields, rep(NA, num_cols - length(fields)))
       }
-    )
-
-    if (is.null(header)) {
-      next
+      setNames(fields, col_names)
     }
 
-    col_names <- colnames(header)
+    # Read and process rows one by one
+    repeat {
+      line <- readLines(con, n = 1)
 
-    # Identify metadata columns and climate variables
-    metadata_cols <- c("STATION", "LATITUDE", "LONGITUDE", "ELEVATION", "NAME")
-    # Exclude columns with "_ATTRIBUTES" suffix
-    attributes_cols <- grep("_ATTRIBUTES$", col_names, value = TRUE)
-    climate_vars <- setdiff(col_names, c(metadata_cols, "DATE", attributes_cols))
+      # Break if end of file is reached
+      if (length(line) == 0) break
 
-    if (length(climate_vars) == 0) {
-      close(con)
-      cat("No climate variables found in", file_path, ". Skipping file.\n")
-      next
-    }
-
-    # Read and process each line
-    line_num <- 1
-    while (length(line <- readLines(con, n = 1)) > 0) {
-      line_num <- line_num + 1
-      # Skip empty lines
-      if (nchar(trimws(line)) == 0) {
-        next
-      }
-
-      # Parse the line
-      row_data <- tryCatch(
-        read.csv(text = line, header = FALSE, stringsAsFactors = FALSE),
+      # Parse the row and truncate columns if necessary
+      row <- tryCatch(
+        as.data.frame(t(parse_and_truncate_row(line, col_names)), stringsAsFactors = FALSE),
         error = function(e) {
-          cat("Failed to parse line", line_num, "in", file_path, ":", e$message, "\n")
-          return(NULL)
+          cat("Error parsing row from", file_path, ":", e$message, "\n")
+          NULL
         }
       )
 
-      if (is.null(row_data)) {
+      if (is.null(row) || nrow(row) == 0) next
+
+      # Use DATE as a plain text column
+      date <- as.character(row$DATE)
+
+      # Skip rows with missing DATE
+      if (is.na(date) || date == "") {
+        cat("Skipping row with missing DATE:", line, "\n")
         next
       }
 
-      # # Check if number of columns matches
-      # if (ncol(row_data) != length(col_names)) {
-      #   cat("Line", line_num, "in", file_path, "has", ncol(row_data), "columns, expected", length(col_names), ". Skipping line.\n")
-      #   next
-      # }
+      # Add the COUNTRY column
+      row$COUNTRY <- country_code
 
-      # Assign column names
-      colnames(row_data) <- col_names
-
-      # Extract DATE as text
-      date_str <- row_data$DATE
-      date_char <- as.character(date_str)
-
-      # Initialize the date in aggregated_data if not already present
-      if (!date_char %in% names(aggregated_data)) {
-        aggregated_data[[date_char]] <- list(COUNTRY = country_code)
-        for (var in climate_vars) {
-          aggregated_data[[date_char]][[var]] <- list(
-            min = Inf,
-            max = -Inf,
-            total = 0,
-            count = 0
+      # Initialize the date in the aggregated_data if not already present
+      if (!date %in% names(aggregated_data)) {
+        aggregated_data[[date]] <- list(COUNTRY = country_code)
+        for (var in setdiff(col_names, c("STATION", "LATITUDE", "LONGITUDE", "ELEVATION", "NAME", "DATE"))) {
+          aggregated_data[[date]][[var]] <- list(
+            min = Inf, max = -Inf, total = 0, count = 0
           )
         }
       }
 
       # Update aggregated data for each climate variable
-      for (var in climate_vars) {
-        value <- suppressWarnings(as.numeric(row_data[[var]]))
+      for (var in setdiff(col_names, c("STATION", "LATITUDE", "LONGITUDE", "ELEVATION", "NAME", "DATE"))) {
+        value <- suppressWarnings(as.numeric(row[[var]]))
+
         if (!is.na(value)) {
-          aggregated_data[[date_char]][[var]]$min <- min(aggregated_data[[date_char]][[var]]$min, value, na.rm = TRUE)
-          aggregated_data[[date_char]][[var]]$max <- max(aggregated_data[[date_char]][[var]]$max, value, na.rm = TRUE)
-          aggregated_data[[date_char]][[var]]$total <- aggregated_data[[date_char]][[var]]$total + value
-          aggregated_data[[date_char]][[var]]$count <- aggregated_data[[date_char]][[var]]$count + 1
+          aggregated_data[[date]][[var]]$min <- min(aggregated_data[[date]][[var]]$min, value, na.rm = TRUE)
+          aggregated_data[[date]][[var]]$max <- max(aggregated_data[[date]][[var]]$max, value, na.rm = TRUE)
+          aggregated_data[[date]][[var]]$total <- aggregated_data[[date]][[var]]$total + value
+          aggregated_data[[date]][[var]]$count <- aggregated_data[[date]][[var]]$count + 1
         }
       }
     }
 
-    # Close the connection
+    # Close the connection to the input file
     close(con)
 
-    # Convert aggregated_data to data.frame
+    # Handle empty aggregated_data gracefully
     if (length(aggregated_data) == 0) {
-      cat("No valid data aggregated for", country_code, ". Skipping file.\n")
+      cat("No valid rows found in", file_path, ". Skipping file.\n")
       next
     }
 
+    # Convert aggregated_data to a data frame
     result <- data.frame(DATE = names(aggregated_data), COUNTRY = country_code, stringsAsFactors = FALSE)
 
-    for (var in climate_vars) {
-      # Extract min
+    # For each climate variable, extract min, max, total, count, and compute avg
+    for (var in setdiff(col_names, c("STATION", "LATITUDE", "LONGITUDE", "ELEVATION", "NAME", "DATE"))) {
       min_values <- vapply(aggregated_data, function(x) x[[var]]$min, numeric(1))
-      # Replace Inf with NA
       min_values[min_values == Inf] <- NA
       result[[paste0(var, "_min")]] <- min_values
 
-      # Extract max
       max_values <- vapply(aggregated_data, function(x) x[[var]]$max, numeric(1))
-      # Replace -Inf with NA
       max_values[max_values == -Inf] <- NA
       result[[paste0(var, "_max")]] <- max_values
 
-      # Extract total
       total_values <- vapply(aggregated_data, function(x) x[[var]]$total, numeric(1))
       result[[paste0(var, "_total")]] <- total_values
 
-      # Extract count
       count_values <- vapply(aggregated_data, function(x) x[[var]]$count, numeric(1))
       result[[paste0(var, "_count")]] <- count_values
 
-      # Compute avg
       result[[paste0(var, "_avg")]] <- ifelse(
         result[[paste0(var, "_count")]] > 0,
         result[[paste0(var, "_total")]] / result[[paste0(var, "_count")]],
@@ -168,10 +133,8 @@ process_climate_data_folder <- function(input_folder, output_folder) {
       )
     }
 
-    # Arrange by DATE (treated as text)
-    result <- result %>% arrange(DATE)
+    result <- result[order(result$DATE), ]
 
-    # Write the aggregated data to the output file
     write.csv(result, output_file, row.names = FALSE)
     cat("Aggregated data for", country_code, "has been written to", output_file, "\n\n")
   }

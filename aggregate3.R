@@ -2,12 +2,18 @@
 library(dplyr)
 
 # Function to process climate data with COUNTRY column, reading line-by-line
-process_climate_data_folder <- function(input_folder, output_folder) {
+process_climate_data_folder <- function(input_folder, output_folder, debug_log = "debug_log.txt") {
   # Ensure the output folder exists
   if (!dir.exists(output_folder)) {
     dir.create(output_folder)
     cat("Created output folder:", output_folder, "\n")
   }
+
+  # Initialize or clear the debug log file
+  if (file.exists(debug_log)) {
+    file.remove(debug_log)
+  }
+  file.create(debug_log)
 
   # Get the list of CSV files in the input folder
   file_list <- list.files(input_folder, pattern = "\\.csv$", full.names = TRUE)
@@ -18,7 +24,7 @@ process_climate_data_folder <- function(input_folder, output_folder) {
 
   # Process each file
   for (file_path in file_list) {
-    # Extract the two-letter country prefix from the file name
+    # Extract the country code from the file name (assumes filename format: XX.csv)
     country_code <- gsub("\\.csv$", "", basename(file_path))
 
     cat("Processing file:", file_path, "for country:", country_code, "\n")
@@ -42,7 +48,10 @@ process_climate_data_folder <- function(input_folder, output_folder) {
 
     # Parse the header
     header <- tryCatch(
-      read.csv(text = header_line, header = TRUE, stringsAsFactors = FALSE),
+      read.csv(
+        text = header_line, header = TRUE, stringsAsFactors = FALSE,
+        sep = ",", quote = "\"", fill = FALSE, comment.char = ""
+      ),
       error = function(e) {
         close(con)
         cat("Failed to parse header in", file_path, ": ", e$message, "\n")
@@ -55,6 +64,7 @@ process_climate_data_folder <- function(input_folder, output_folder) {
     }
 
     col_names <- colnames(header)
+    expected_cols <- length(col_names)
 
     # Identify metadata columns and climate variables
     metadata_cols <- c("STATION", "LATITUDE", "LONGITUDE", "ELEVATION", "NAME")
@@ -77,11 +87,16 @@ process_climate_data_folder <- function(input_folder, output_folder) {
         next
       }
 
-      # Parse the line
+      # Parse the line with strict parameters
       row_data <- tryCatch(
-        read.csv(text = line, header = FALSE, stringsAsFactors = FALSE),
+        read.csv(
+          text = line, header = FALSE, stringsAsFactors = FALSE,
+          sep = ",", quote = "\"", fill = FALSE, comment.char = ""
+        ),
         error = function(e) {
-          cat("Failed to parse line", line_num, "in", file_path, ":", e$message, "\n")
+          msg <- paste("Failed to parse line", line_num, "in", file_path, ":", e$message)
+          cat(msg, "\n")
+          writeLines(msg, debug_log, sep = "\n", append = TRUE)
           return(NULL)
         }
       )
@@ -90,9 +105,18 @@ process_climate_data_folder <- function(input_folder, output_folder) {
         next
       }
 
-      # Check if number of columns matches
-      if (ncol(row_data) != length(col_names)) {
-        cat("Line", line_num, "in", file_path, "has", ncol(row_data), "columns, expected", length(col_names), ". Skipping line.\n")
+      # Check if number of columns matches the expected number
+      actual_cols <- ncol(row_data)
+      if (actual_cols != expected_cols) {
+        msg <- paste(
+          "Line", line_num, "in", file_path,
+          "has", actual_cols, "columns, expected", expected_cols, ". Skipping line."
+        )
+        cat(msg, "\n")
+        writeLines(msg, debug_log, sep = "\n", append = TRUE)
+        # Additionally, log the actual data fields for debugging
+        actual_fields <- paste(row_data[1, ], collapse = ", ")
+        writeLines(paste("Actual fields:", actual_fields), debug_log, sep = "\n", append = TRUE)
         next
       }
 
