@@ -1,0 +1,22 @@
+Notes
+
+- AR column likely refers to Admin Units and contains JSON-like data
+https://doc.emdat.be/docs/data-structure-and-content/emdat-public-table/
+
+- So I'm looking for events that have a larger coverage across more countries
+  because this would reduce bias
+
+- I assume there will be some random country effects and want to remove the
+  correlation between disaster and country
+
+mtwesley@Wani Project % wget https://www.ncei.noaa.gov/data/global-summary-of-the-month/archive/gsom-latest.tar.gz
+--2024-11-29 13:03:06--  https://www.ncei.noaa.gov/data/global-summary-of-the-month/archive/gsom-latest.tar.gz
+Resolving www.ncei.noaa.gov (www.ncei.noaa.gov)... 205.167.25.167, 205.167.25.178, 205.167.25.172, ...
+Connecting to www.ncei.noaa.gov (www.ncei.noaa.gov)|205.167.25.167|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 1478289029 (1.4G) [application/gzip]
+Saving to: ‘gsom-latest.tar.gz’
+
+gsom-latest.tar.gz           100%[=============================================>]   1.38G  2.60MB/s    in 6m 47s
+
+2024-11-29 13:09:53 (3.46 MB/s) - ‘gsom-latest.tar.gz’ saved [1478289029/1478289029]
