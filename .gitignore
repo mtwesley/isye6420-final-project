@@ -1,8 +1,11 @@
 # Ignore data files and processed outputs
 old*
-gsoy-latest*
-gsom-latest*
-gsom-merged*
+*gsom-aggregated*
+*gsoy-aggregated*
+*gsom-latest*
+*gsoy-latest*
+*gsom-merged*
+*gsoy-merged*
 *.gz
 *.zip
 *.tar
