@@ -7,10 +7,10 @@ prefix_file="noaa_ncei/prefix_to_country_code.csv"
 # Ensure output directory exists
 mkdir -p "$output_dir"
 
-# Read prefix mappings into an associative array
-declare -A prefix_map
+# Read prefix mappings into a regular array
+prefix_map_file=$(mktemp)
 while IFS=, read -r prefix country_code; do
-  prefix_map["$prefix"]="$country_code"
+  echo "$prefix,$country_code" >>"$prefix_map_file"
 done <"$prefix_file"
 
 # Process each file in the input directory
@@ -18,9 +18,10 @@ for input_file in "$input_dir"/*.csv; do
   file_name=$(basename "$input_file" .csv)
 
   # Check if the file name matches a prefix in the mapping
-  if [[ -v prefix_map["$file_name"] ]]; then
+  country_code=$(grep "^$file_name," "$prefix_map_file" | cut -d, -f2)
+
+  if [[ -n $country_code ]]; then
     # File needs renaming logic
-    country_code=${prefix_map["$file_name"]}
     output_file="$output_dir/$country_code.csv"
     temp_file=$(mktemp)
 
@@ -49,4 +50,5 @@ for input_file in "$input_dir"/*.csv; do
   fi
 done
 
+rm -f "$prefix_map_file"
 echo "Processing complete. Files are in $output_dir"
