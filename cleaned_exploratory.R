@@ -134,5 +134,27 @@ ddf_data_coverage <- disaster_determinants_filtered %>%
   summarise(across(where(is.numeric), ~ mean(!is.na(.)))) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "coverage")
 
+disaster_determinants_cleaned <- disaster_determinants_filtered %>%
+  group_by(alpha3, year) %>%
+  summarise(
+    across(
+      starts_with(c("dp", "dt", "dx", "em", "prcp", "tavg", "tmax", "tmin", "wdfi", "wsfi")),
+      ~ mean(.x, na.rm = TRUE)
+    ),
+    storms = sum(storms, na.rm = TRUE),
+    floods = sum(floods, na.rm = TRUE),
+    deaths = sum(deaths, na.rm = TRUE),
+    livesAffected = sum(livesAffected, na.rm = TRUE),
+    economicDamage = sum(economicDamage, na.rm = TRUE),
+    .groups = "drop"
+  )
 
+# Create a coverage matrix
+country_coverage <- disaster_determinants_cleaned %>%
+  group_by(alpha3) %>%
+  summarise(across(where(is.numeric), ~ sum(!is.na(.)) / length(1980:2020)))
 
+country_coverage_averages <- country_coverage %>%
+  rowwise() %>%
+  mutate(average_coverage = mean(c_across(where(is.numeric)), na.rm = TRUE)) %>%
+  select(alpha3, average_coverage)

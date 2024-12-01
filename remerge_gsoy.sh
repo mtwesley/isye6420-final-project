@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Directories and files
 input_dir="noaa_ncei/gsoy-merged"
 output_dir="noaa_ncei/gsoy-remerged"
 prefix_file="noaa_ncei/prefix_to_country_code.csv"
@@ -11,15 +12,13 @@ mkdir -p "$output_dir"
 # Create or clear the log file
 : >"$log_file"
 
-# Read prefix mappings into a regular array
+# Create a temporary file for prefix mappings
 prefix_map_file=$(mktemp)
-while IFS=, read -r prefix country_code; do
-  echo "$prefix,$country_code" >>"$prefix_map_file"
-done <"$prefix_file"
+cp "$prefix_file" "$prefix_map_file"
 
 echo "Starting processing..." | tee -a "$log_file"
 
-# Process each file in the input directory
+# Process each CSV file in the input directory
 for input_file in "$input_dir"/*.csv; do
   file_name=$(basename "$input_file" .csv)
 
@@ -32,15 +31,19 @@ for input_file in "$input_dir"/*.csv; do
     temp_file=$(mktemp)
 
     # Replace the first column (prefix) with the correct country code
-    awk -v new_code="$country_code" 'NR == 1 {print; next} {sub($1, new_code); print}' "$input_file" >"$temp_file"
+    awk -v new_code="$country_code" '
+      BEGIN { FS = OFS = "," }            # Ensure proper field delimiters
+      NR == 1 { print; next }            # Print the header row as-is
+      { $1 = "\"" new_code "\""; print } # Replace the first column with new_code
+    ' "$input_file" >"$temp_file"
 
     # Append to output file, adding header row if necessary
     if [[ -f "$output_file" ]]; then
       echo "  Appending to existing file: $country_code.csv" | tee -a "$log_file"
-      tail -n +2 "$temp_file" >>"$output_file"
+      tail -n +2 "$temp_file" >>"$output_file" # Skip header when appending
     else
       echo "  Creating new file: $country_code.csv" | tee -a "$log_file"
-      mv "$temp_file" "$output_file"
+      mv "$temp_file" "$output_file" # Keep header for new file
     fi
     rm -f "$temp_file"
   else

@@ -6,6 +6,8 @@ old*
 *gsoy-latest*
 *gsom-merged*
 *gsoy-merged*
+*gsoy-remerged*
+*gsoy-reaggregated*
 *.gz
 *.zip
 *.tar

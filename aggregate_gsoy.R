@@ -31,7 +31,8 @@ for (file_path in file_list) {
           SD = ~ sd(., na.rm = TRUE)
         ),
         .names = "{.col}_{.fn}"
-      )
+      ),
+      .groups = "drop" # Ensures the result is ungrouped
     ) %>%
     arrange(DATE) %>%
     mutate(across(everything(), ~ ifelse(is.infinite(.), NA, .)))
