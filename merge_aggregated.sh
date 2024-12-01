@@ -1,8 +1,11 @@
 #!/bin/bash
 
 # Directories and output file
-input_dir="noaa_ncei/gsoy-aggregated"
-output_file="noaa_ncei/gsoy-aggregated-all-countries.csv"
+# input_dir="noaa_ncei/gsoy-aggregated"
+# output_file="noaa_ncei/gsoy-aggregated-all-countries.csv"
+
+input_dir="noaa_ncei/gsoy-reaggregated"
+output_file="noaa_ncei/gsoy-reaggregated-all-countries.csv"
 
 # Check if input directory exists
 if [ ! -d "$input_dir" ]; then
@@ -22,15 +25,12 @@ for file in "$input_dir"/*.csv; do
   if [ -f "$file" ]; then
     echo "Processing file: $file"
 
-    # Extract the country code from the file name (e.g., "US.csv" -> "US")
-    country=$(basename "$file" .csv)
-
     # Read the header of the current file
     current_header=$(head -n 1 "$file")
 
-    # Add COUNTRY to the header if it's the first file
+    # Handle the header row for the merged file
     if [ "$is_first_file" = true ]; then
-      echo "\"COUNTRY\",$current_header" >"$output_file"
+      echo "$current_header" >"$output_file"
       header="$current_header"
       is_first_file=false
     else
@@ -43,8 +43,8 @@ for file in "$input_dir"/*.csv; do
       fi
     fi
 
-    # Add COUNTRY column to each row of the file and append to the output
-    tail -n +2 "$file" | awk -v country="$country" -F',' 'BEGIN { OFS="," } { print country, $0 }' >>"$output_file"
+    # Append data rows (skip the header row) to the output file
+    tail -n +2 "$file" >>"$output_file"
   else
     echo "No CSV files found in directory: $input_dir"
   fi

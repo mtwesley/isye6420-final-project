@@ -29,5 +29,13 @@ gsom-latest.tar.gz           100%[=============================================>
 
 - some work needed to be done to fix up GSOY countries -- resulting in data that may not be perfect
 
+- iniital model will only contain these variables
+> strsplit((data_subset_summary_df %>% filter(Rows == max(Rows)))$Subset, ", ") %>% unlist()
+ [1] "alpha3"    "year"      "country"   "region"    "subregion" "dp01_mean" "dp10_mean" "dp1x_mean" "dt00_mean" "dt32_mean"
+[11] "dx32_mean" "dx70_mean" "dx90_mean" "emnt_mean" "emxp_mean" "emxt_mean" "prcp_mean" "tavg_mean" "tmax_mean" "tmin_mean"
+[21] "dp01_sd"   "dp10_sd"   "dp1x_sd"   "dt00_sd"   "dt32_sd"   "dx32_sd"   "dx70_sd"   "dx90_sd"   "emnt_sd"   "emxp_sd"
+[31] "emxt_sd"   "prcp_sd"   "tavg_sd"   "tmax_sd"   "tmin_sd"
+
+
 
 
