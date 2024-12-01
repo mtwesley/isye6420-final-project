@@ -223,5 +223,193 @@ ggplot(emdat_storm_plot, aes(x = `Start Year`, y = Value, color = Metric)) +
   ) +
   theme_minimal()
 
-write.csv(emdat_flood_storm_summary, "emdat_flood_storm_summary.csv", row.names = FALSE)
+# write.csv(emdat_flood_storm_summary, "emdat_flood_storm_summary.csv", row.names = FALSE)
+
+emdat_flood_storm_data <- emdat_flood_storm %>%
+  select(
+    year = `Start Year`,
+    alpha3 = ISO,
+    country = Country,
+    region = Subregion,
+    subregion = Region,
+    disaster = `Disaster Type`,
+    deaths = `Total Deaths`,
+    livesAffected = `Total Affected`,
+    economicDamage = `Total Damage, Adjusted ('000 US$)`
+  )
+
+emdat_flood_storm_aggregated <- emdat_flood_storm_data %>%
+  group_by(year, alpha3, country, region, subregion) %>%
+  summarise(
+    storms = sum(disaster == "Storm", na.rm = TRUE),
+    floods = sum(disaster == "Flood", na.rm = TRUE),
+    deaths = sum(deaths, na.rm = TRUE),
+    livesAffected = sum(livesAffected, na.rm = TRUE),
+    economicDamage = sum(economicDamage, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# UNDESA migration data
+undesa_data <- read_excel("undesa/undesa_pd_2020_ims_stock_origin_world.xlsx", skip = 3)
+
+undesa_data <- undesa_data %>%
+  rename(
+    country = `Region, development group, country or area of origin`,
+    m49 = `Location code of origin`
+  ) %>%
+  mutate(m49 = sprintf("%03d", as.numeric(m49)))
+
+undesa_data_migration <- undesa_data %>%
+  pivot_longer(
+    cols = -c(country, m49),
+    names_to = "year",
+    values_to = "migrants"
+  ) %>%
+  group_by(country, m49, year) %>%
+  summarise(migrants = sum(migrants, na.rm = TRUE), .groups = "drop")
+
+
+prefix_to_country_code <- data.frame(
+  prefix = c("AJ", "AY", "BC", "BK", "BP", "BU", "CE", "CJ", "CQ", "CS", "CT", "DA", "DR", "EI", "EN", "EU", "EZ",
+             "FG", "FP", "FS", "HO", "IC", "IV", "JA", "JN", "JQ", "JU", "KS", "KT", "KU", "LE", "LG", "LH", "LO",
+             "MB", "MI", "MJ", "NH", "NN", "NS", "PC", "PO", "PP", "RI", "RM", "RP", "RQ", "SF", "SP", "SU", "SW",
+             "TE", "TI", "TS", "TU", "TX", "UC", "UK", "UP", "UV", "VM", "VQ", "WA", "WI", "WQ", "WZ", "ZI"),
+  country = c("AZ", "AQ", "BW", "BA", "SB", "BG", "LK", "KY", "MP", "CR", "CF", "DK", "DO", "IE", "EE", "FR", "CZ",
+              "FR", "FR", "FR", "HN", "IS", "CI", "JP", "NO", "US", "FR", "KR", "AU", "KW", "LB", "EE", "LT", "SK",
+              "FR", "MW", "ME", "VU", "NL", "SR", "PN", "PT", "PG", "RS", "MH", "PH", "US", "ZA", "ES", "SD", "SE",
+              "FR", "UZ", "TN", "TR", "TM", "NL", "GB", "UA", "BF", "VN", "US", "NA", "MA", "US", "SZ", "ZW")
+)
+
+# GSOY climate data
+gsoy_data <- read_csv("gsoy-aggregated-fixed.csv")
+
+gsoy_climate <- gsoy_data %>%
+  rename(YEAR = DATE, ALPHA2 = COUNTRY)
+
+prefix_to_country_code <- data.frame(
+  prefix = c("AJ", "AY", "BC", "BK", "BP", "BU", "CE", "CJ", "CQ", "CS", "CT", "DA", "DR", "EI", "EN", "EU", "EZ",
+             "FG", "FP", "FS", "HO", "IC", "IV", "JA", "JN", "JQ", "JU", "KS", "KT", "KU", "LE", "LG", "LH", "LO",
+             "MB", "MI", "MJ", "NH", "NN", "NS", "PC", "PO", "PP", "RI", "RM", "RP", "RQ", "SF", "SP", "SU", "SW",
+             "TE", "TI", "TS", "TU", "TX", "UC", "UK", "UP", "UV", "VM", "VQ", "WA", "WI", "WQ", "WZ", "ZI"),
+
+  new_code = c("AZ", "AQ", "BW", "BA", "SB", "BG", "LK", "KY", "MP", "CR", "CF", "DK", "DO", "IE", "EE", "FR", "CZ",
+               "FR", "FR", "FR", "HN", "IS", "CI", "JP", "NO", "US", "FR", "KR", "AU", "KW", "LB", "EE", "LT", "SK",
+               "FR", "MW", "ME", "VU", "NL", "SR", "PN", "PT", "PG", "RS", "MH", "PH", "US", "ZA", "ES", "SD", "SE",
+               "FR", "UZ", "TN", "TR", "TM", "NL", "GB", "UA", "BF", "VN", "US", "NA", "MA", "US", "SZ", "ZW")
+)
+
+# Apply the mappings
+gsoy_climate <- gsoy_climate %>%
+  left_join(prefix_to_country_code, by = c("ALPHA2" = "prefix"), relationship = "many-to-many") %>%
+  mutate(ALPHA2 = coalesce(new_code, ALPHA2)) %>%
+  select(-new_code) %>%
+  rename_with(toupper)
+
+# gsoy_climate_final <- gsoy_data %>%
+#   rename(ALPHA2 = COUNTRY) %>%
+#   left_join(prefix_to_country_code, by = c("ALPHA2" = "prefix")) %>%
+#   mutate(
+#     ALPHA2 = ifelse(!is.na(country), country, ALPHA2)
+#   ) %>%
+#   select(-country)
+
+# gsoy_climate <- gsoy_data %>%
+#   rename(
+#     YEAR = DATE,
+#     ALPHA2 = COUNTRY
+#   )
+
+# GSOY has old coding that does not comply with ISO2 letter encoding
+# prefix_country_lookup <- read.csv("prefix_country_lookup.csv") %>%
+#   mutate(country = toupper(country))
+
+# gsoy_climate <- gsoy_climate %>%
+#   mutate(
+#     COUNTRY = ifelse(
+#       ALPHA2 %in% prefix_country_lookup$prefix,
+#       prefix_country_lookup$country[match(ALPHA2, prefix_country_lookup$prefix)],
+#       ALPHA2
+#     )
+#   )
+
+# Still doesn't cover it all so some manual coding needs to be done
+# prefix_to_country_code <- data.frame(
+#   old_code = c("AJ", "AY", "BC", "BK", "BP", "BU", "CE", "CJ", "CQ", "CS"),
+#   new_code = c("AZ", "AQ", "BW", "BA", "SB", "BG", "LK", "KY", "MP", "CR")
+# )
+#
+# gsoy_climate <- gsoy_climate %>%
+#   rename_with(tolower) %>%
+#   left_join(prefix_to_country_code, by = c("alpha2" = "old_code")) %>%
+#   mutate(alpha2 = ifelse(!is.na(new_code), new_code, alpha2)) %>%
+#   select(-new_code) %>%
+#   rename_with(toupper)
+
+
+
+# gsoy_climate$YEAR
+# emdat_flood_storm_aggregated$year
+# undesa_data_migration$year
+
+gsoy_climate_filtered <- gsoy_climate %>%
+  filter(YEAR >= 1980 & YEAR <= 2020)
+
+gsoy_climate_coverage <- sapply(gsoy_climate_filtered, function(column) {
+  mean(!is.na(column))
+})
+
+# Convert to a data frame for better presentation
+coverage_table <- data.frame(
+  Variable = names(gsoy_climate_coverage),
+  `Coverage (%)` = gsoy_climate_coverage
+)
+
+# Identify variables with coverage less than 10%
+# Remove low coverage variables
+gsoy_low_coverage_variables <- names(gsoy_climate_coverage[gsoy_climate_coverage < 0.10])
+
+gsoy_climate_filtered_cleaned <- gsoy_climate_filtered %>%
+  select(-all_of(gsoy_low_coverage_variables))
+
+# lets start connecting them together with country codes
+
+# Download the country codes dataset
+url <- "https://raw.githubusercontent.com/datasets/country-codes/main/data/country-codes.csv"
+download.file(url, "country-codes.csv")
+
+# Load the dataset into R
+country_codes <- read.csv("country-codes.csv", stringsAsFactors = FALSE)
+
+# gsoy_climate_filtered_cleaned$ALPHA2
+# undesa_data_migration$m49
+# emdat_flood_storm_aggregated$alpha3
+
+# Country code lookup table
+country_codes_lookup <- country_codes %>%
+  select(
+    alpha2 = ISO3166.1.Alpha.2,
+    alpha3 = ISO3166.1.Alpha.3,
+    m49 = M49
+  ) %>%
+  mutate(m49 = sprintf("%03d", as.numeric(m49)))
+
+gsoy_climate_final <- gsoy_climate_filtered_cleaned %>%
+  rename_with(tolower) %>%
+  left_join(country_codes_lookup, by = "alpha2", relationship = "many-to-many") %>%
+  rename_with(toupper)
+
+undesa_migration_final <- undesa_data_migration %>%
+  left_join(country_codes_lookup, by = "m49", relationship = "many-to-many")
+
+emdat_diaster_final <- emdat_flood_storm_aggregated %>%
+  left_join(country_codes_lookup, by = "alpha3", relationship = "many-to-many")
+
+
+# population data
+
+# Define the URL of the raw CSV file
+url <- "https://raw.githubusercontent.com/datasets/population/main/data/population.csv"
+download.file(url, "population.csv")
+
+population_data <- read.csv("population.csv")
 

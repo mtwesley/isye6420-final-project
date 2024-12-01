@@ -6,8 +6,8 @@ set -o pipefail
 set -x
 
 # Set the input and output directories
-input_dir="gsom-latest"
-output_dir="gsom-merged"
+input_dir="noaa_ncei/gsom-latest"
+output_dir="noaa_ncei/gsom-merged"
 mkdir -p "$output_dir"
 
 # Temporary file to store the file list

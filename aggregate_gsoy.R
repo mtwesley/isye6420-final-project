@@ -1,7 +1,7 @@
 library(dplyr)
 
-input_dir <- "gsoy-merged"
-output_dir <- "gsoy-aggregated"
+input_dir <- "noaa_ncei/gsoy-merged"
+output_dir <- "noaa_ncei/gsoy-aggregated"
 
 if (!dir.exists(input_dir)) stop("Input directory does not exist: ", input_dir)
 if (!dir.exists(output_dir)) dir.create(output_dir, showWarnings = FALSE)

@@ -10,8 +10,8 @@ variables <- c(
   "WSF1", "WSF2", "WSF5", "WSFG", "WSFI", "WSFM"
 )
 
-input_dir <- "gsoy-latest"
-output_dir <- "gsoy-merged"
+input_dir <- "noaa_ncei/gsoy-latest"
+output_dir <- "noaa_ncei/gsoy-merged"
 
 if (!dir.exists(input_dir)) stop("Input directory does not exist: ", input_dir)
 if (!dir.exists(output_dir)) dir.create(output_dir, showWarnings = FALSE)
