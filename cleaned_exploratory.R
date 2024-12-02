@@ -74,7 +74,7 @@ migration_filtered <- migration_data %>%
 climate_variables <- c(
   "year", "alpha3", "alpha2",
   "prcp_mean", "emxp_max", "emnt_min", "emxt_max",
-  "tmax_mean", "tmin_min", "tavg_mean"
+  "tmax_max", "tmin_min", "tavg_mean"
 )
 
 disaster_climate_determinants <- climate_filtered %>%
@@ -105,10 +105,8 @@ top_80_countries <- country_coverage_averages %>%
   slice_head(n = 80)
 
 # Filter the original country_coverage to keep only the top 80
-disaster_determinants_80_countries <- disaster_determinants_cleaned %>%
+disaster_determinants_80_countries <- disaster_climate_determinants %>%
   filter(alpha3 %in% top_80_countries$alpha3)
-
-
 
 # Subset by patterns directly without special handling for _mean or _sd
 data_with_patterns <- disaster_determinants_80_countries %>%
@@ -123,14 +121,28 @@ data_subset_summary <- lapply(data_subsets, function(subset) {
     rows = nrow(subset))
 })
 
+# Summary dataframe with subsets
 data_subset_summary_df <- data.frame(
+  Pattern = names(data_subsets),
   Subset = sapply(data_subset_summary, function(x) paste(x$variables, collapse = ", ")),
   Rows = sapply(data_subset_summary, function(x) x$rows)) %>%
   arrange(desc(Rows))
 
-largest_subset_variables <- strsplit((data_subset_summary_df %>% filter(Rows == max(Rows)))$Subset, ", ") %>% unlist()
+disaster_determinants_partitioned_subsets <- list()
 
-disaster_determinants_largest_subset <- disaster_determinants_80_countries %>%
-  filter(if_all(all_of(largest_subset_variables), ~ !is.na(.)))
+remaining_data <- disaster_determinants_80_countries
+for (i in seq_len(nrow(data_subset_summary_df))) {
+  pattern <- data_subset_summary_df$Pattern[i]
+  variables <- strsplit(data_subset_summary_df$Subset[i], ", ") %>% unlist()
+
+  subset <- remaining_data %>%
+    filter(if_all(all_of(variables), ~ !is.na(.)))
+
+  disaster_determinants_partitioned_subsets[[i]] <- subset
+
+  remaining_data <- remaining_data %>%
+    anti_join(subset, by = names(remaining_data))
+}
+
 
 
