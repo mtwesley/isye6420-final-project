@@ -1,5 +1,11 @@
+library(dplyr)
+library(bayestestR)
+library(posterior)
+library(bayesplot)
+library(readr)
 library(greta)
 
+# Fetch from data subsets
 determinants <- disaster_determinants_partitioned_subsets[[1]]
 
 # Observed data
@@ -78,4 +84,9 @@ disaster_model <- model(
 )
 
 # Sample the posterior
-draws <- mcmc(disaster_model, warmup = 4000, n_samples = 10000, chains = 4)
+draws <- mcmc(disaster_model, warmup = 5000, n_samples = 20000, chains = 4)
+
+mcmc_trace(draws)
+mcmc_dens(draws)
+
+get.stats(draws)

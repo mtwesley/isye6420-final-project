@@ -1,0 +1,38 @@
+would it make sense to build a model where annual climate variables can be used to predict number of floods or storms in a year, perhaps taking in consideration region and subregion effects
+
+if so, could we use a bayesian method to impute disaster, deaths, and affected
+
+then we extend the em-dat dataset with actualFloods, likelyFloods, actualStorms, likelyStorms across all countries over all years
+
+now the next stage would be to look at migration. since the migration data only is measured every 5 years, can we consider this somewhat censored data ?
+
+now it's hard to compare migration stocks across countries, because countries have different populations. so what i want to do is normalize the stock by population. thereby creating a variable that somewhat measures the prevalence of emigration within a population, which can somewhat be thought of as a weight or probability of migrating or a favor or preference to migrate among that population
+
+the reason why i want this ratio is because i want to compare across countries
+
+specifically, i want to make a general statement about climate change and natural disasters and its effect on the desire to migrate among a population
+
+i also want to measure a somewhat delayed effect
+
+so what i actually want to do is gather this
+
+year (year between 1980-2020)
+migrationYear (closest 5-year interval in the future -- 1990, 1995, 2000, etc.)
+distance (migrationYear - disasterYear)
+migrationRate (migrants / population for that country)
+numActualDisasters (num of floods/storms in this year)
+numActualDiastersCumulative (num of floods/storms since previous 5-year interval)
+numLikelyDisasters (num of floods/storms in this year)
+numLikelyDiastersCumulative (num of floods/storms since previous 5-year interval)
+... similar for deaths, livesAffected, economicImpact
+
+now if you can compare across countries (since migrationRate is normalized to country) then you can break them into different groups
+-years where there were no disasters or less or less intense (deaths, impact) in the five year period
+- years with disasters or likely disasters
+
+then perhaps we can see a difference between those groups 
+by comparing the distance to migrationRate between those groups
+we could see if the existence of disasters have a higher migrationRate than when not or when likely
+and we cuold run a regression to see this perhaps
+
+does thi smake sense
